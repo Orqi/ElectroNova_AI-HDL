@@ -30,3 +30,5 @@ fpga/generic/test/user_peripherals/*/__pycache__/
 fpga/generic/test/__pycache__/
 fpga/generic/test/*results.xml
 .venv
+*.vvp
+*.vcd
