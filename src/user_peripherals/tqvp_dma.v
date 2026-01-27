@@ -21,8 +21,8 @@ module tqvp_dma(
     input  [7:0]  ui_in,
     output [7:0]  uo_out,
     output [31:0] data_out,
-    output        data_ready,
-    output        user_interrupt,
+    output         data_ready,
+    output         user_interrupt,
 
     // Optional master bus interface exposed for top-level integration.
     // Connect these to the system memory/bus (simple valid/ready read/write).
