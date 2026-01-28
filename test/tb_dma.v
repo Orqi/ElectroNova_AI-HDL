@@ -108,6 +108,11 @@ module tb_dma;
     integer outfile;
 
     initial begin
+        // --- Added waveform dump commands ---
+        $dumpfile("dma.vcd");
+        $dumpvars(0, tb_dma);
+        // ------------------------------------
+
         outfile = $fopen("dma_test.log", "w");
         $fwrite(outfile, "=== DMA Testbench Start ===\n");
         $fflush(outfile);
