@@ -1,0 +1,12 @@
+# Yosys synthesis script — generic RTL netlist for tqvp_dma
+# Usage: yosys -s synth_tqvp_dma.ys
+
+read_verilog src/user_peripherals/tqvp_dma.v
+hierarchy -top tqvp_dma
+proc; opt; fsm; opt; memory; opt
+check -assert
+
+# outputs
+write_verilog build/tqvp_dma_synth.v
+write_rtlil build/tqvp_dma.il
+# show -format png -prefix build/tqvp_dma  # requires Graphviz if you want a diagram
