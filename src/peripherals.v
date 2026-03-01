@@ -428,7 +428,11 @@ module tinyQV_peripherals #(parameter CLOCK_MHZ=64) (
         .user_interrupt(user_interrupts[13])
     );
 
-    tqvp_full_empty i_user_peri14 (
+    // --------------------------------------------------------------------- //
+    // DMA CONTROLLER (Slot 14) - AI-HDL 2026 Optimized
+    // Replaced the empty stub with the High-Performance DMA
+    // --------------------------------------------------------------------- //
+    tqvp_dma i_user_peri14_dma (
         .clk(clk),
         .rst_n(rst_n),
 
@@ -444,7 +448,20 @@ module tinyQV_peripherals #(parameter CLOCK_MHZ=64) (
         .data_out(data_from_user_peri[14]),
         .data_ready(data_ready_from_user_peri[14]),
 
-        .user_interrupt(user_interrupts[14])
+        .user_interrupt(user_interrupts[14]),
+
+        // Master Bus connections (Stubbed for now, connect to system bus later)
+        .m_addr(), 
+        .m_wdata(),
+        .m_wstrb(),
+        .m_write(),
+        .m_read(),
+        .m_valid(),
+        .m_rdata(32'h0), 
+        .m_ready(1'b1), 
+        .m_error(1'b0),
+        
+        .idle()
     );
 
     mkTinyTone_Peripheral i_tinytone15 (

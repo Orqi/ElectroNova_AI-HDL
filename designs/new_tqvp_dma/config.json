@@ -10,5 +10,8 @@
     "VDD_NETS": ["vccd1"],
     "GND_NETS": ["vssd1"],
     "RUN_CVC": 0,
-    "RUN_ANTENNA_CHECK": 0
+    "RUN_ANTENNA_CHECK": 1,
+    "GRT_REPAIR_ANTENNAS": 1,
+    "RUN_HEURISTIC_DIODE_INSERTION": 1,
+    "DIODE_INSERTION_STRATEGY": 3
 }

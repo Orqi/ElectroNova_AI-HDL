@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1772388372" />
+    <testcase name="test_dma_performance" classname="test_dma" file="/Users/amritareji/Desktop/new/ElectroNova_AI-HDL/src/user_peripherals/test_dma.py" lineno="21" time="0.001558065414428711" sim_time_ns="400.001" ratio_time="256729.27227299157" />
+  </testsuite>
+</testsuites>
