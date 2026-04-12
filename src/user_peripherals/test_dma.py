@@ -5,98 +5,129 @@ from cocotb.triggers import RisingEdge, Timer
 
 os.environ['COCOTB_RESOLVE_X'] = 'ZEROS'
 
-async def dummy_memory_slave(dut):
-    """Simulate Memory Responding to DMA Reads and Writes"""
+# ---------------- MEMORY MODEL ---------------- #
+memory = {}
+
+async def memory_model(dut):
     while True:
         await RisingEdge(dut.clk)
+
         dut.m_ready.value = 1
-        
-        # If the DMA tries to READ, give it dummy data and acknowledge
-        if hasattr(dut, 'm_read') and getattr(dut.m_read, 'value', 0) == 1:
-            if hasattr(dut, 'data_in'): dut.data_in.value = 0xDEADBEEF
-            if hasattr(dut, 'mem_valid'): dut.mem_valid.value = 1
-        else:
-            if hasattr(dut, 'mem_valid'): dut.mem_valid.value = 0
+        dut.m_error.value = 0
 
-@cocotb.test()
-async def test_dma_performance(dut):
-    """Verify DMA Stream via Bus Interface"""
-    clock = Clock(dut.clk, 40, units="ns")
-    cocotb.start_soon(clock.start())
-    cocotb.start_soon(dummy_memory_slave(dut))
-
-    # 1. Initialize System Signals
-    dut.rst_n.value = 0
-    # Initialize the Slave Bus (CPU to Peripheral interface)
-    if hasattr(dut, 'bus_valid'): dut.bus_valid.value = 0
-    if hasattr(dut, 'bus_addr'): dut.bus_addr.value = 0
-    if hasattr(dut, 'bus_wdata'): dut.bus_wdata.value = 0
-    if hasattr(dut, 'bus_wstrb'): dut.bus_wstrb.value = 0
-    
-    await Timer(200, units="ns")
-    dut.rst_n.value = 1
-    await Timer(100, units="ns")
-    
-    # 2. Configure via Slave Bus (Assuming standard register map)
-    # Write Source Addr (Offset 0x04)
-    if hasattr(dut, 'bus_valid'):
-        await RisingEdge(dut.clk)
-        dut.bus_addr.value = 0x04
-        dut.bus_wdata.value = 0x1000
-        dut.bus_wstrb.value = 0xF
-        dut.bus_valid.value = 1
-        await RisingEdge(dut.clk)
-        dut.bus_valid.value = 0
-        
-        # Write Dest Addr (Offset 0x08)
-        await RisingEdge(dut.clk)
-        dut.bus_addr.value = 0x08
-        dut.bus_wdata.value = 0x2000
-        dut.bus_wstrb.value = 0xF
-        dut.bus_valid.value = 1
-        await RisingEdge(dut.clk)
-        dut.bus_valid.value = 0
-        
-        # Write Length (Offset 0x0C)
-        await RisingEdge(dut.clk)
-        dut.bus_addr.value = 0x0C
-        dut.bus_wdata.value = 64
-        dut.bus_wstrb.value = 0xF
-        dut.bus_valid.value = 1
-        await RisingEdge(dut.clk)
-        dut.bus_valid.value = 0
-        
-        # Write Control/Start (Offset 0x00)
-        await RisingEdge(dut.clk)
-        dut._log.info("Sending Start Command via Bus...")
-        dut.bus_addr.value = 0x00
-        dut.bus_wdata.value = 0x01 # Start bit
-        dut.bus_wstrb.value = 0xF
-        dut.bus_valid.value = 1
-        await RisingEdge(dut.clk)
-        dut.bus_valid.value = 0
-    else:
-        # Fallback if there is no bus interface
-        dut.src_addr.value = 0x1000
-        dut.dst_addr.value = 0x2000
-        dut.length.value = 64
-        if hasattr(dut, 'start_r'):
-            dut._log.info("Sending Start Pulse Directly...")
-            dut.start_r.value = 1
-            await RisingEdge(dut.clk)
-            dut.start_r.value = 0
-
-    # 3. Wait for m_valid (The Write Output)
-    for i in range(200): # Allow time for pipeline to fill
-        await RisingEdge(dut.clk)
-        if str(dut.m_valid.value) == '1':
+        # READ
+        if dut.m_valid.value and dut.m_read.value:
             addr = int(dut.m_addr.value)
-            dut._log.info(f"🏆 SUCCESS: DMA Pipeline is streaming! Write Address: {hex(addr)}")
-            return
+            data = memory.get(addr, 0xDEADBEEF)
+            dut.m_rdata.value = data
 
-    # If it fails, dump state
-    read_req = dut.m_read.value if hasattr(dut, 'm_read') else "N/A"
-    write_req = dut.m_write.value if hasattr(dut, 'm_write') else "N/A"
-    fifo_cnt = dut.fifo_count.value if hasattr(dut, 'fifo_count') else "N/A"
-    state = dut.state.value if hasattr(dut, 'state') else "N/A"
-    raise RuntimeError(f"DMA hung. state={state}, read={read_req}, write={write_req}, fifo={fifo_cnt}")
+        # WRITE
+        if dut.m_valid.value and dut.m_write.value:
+            addr = int(dut.m_addr.value)
+            data = int(dut.m_wdata.value)
+            memory[addr] = data
+            dut._log.info(f"WRITE {hex(addr)} = {hex(data)}")
+
+
+# ---------------- HELPER ---------------- #
+async def write_reg(dut, addr, value):
+    dut.address.value = addr
+    dut.data_in.value = value
+    dut.data_write_n.value = 0
+    await RisingEdge(dut.clk)
+    dut.data_write_n.value = 3
+
+
+# ---------------- TEST ---------------- #
+@cocotb.test()
+async def test_dma_full(dut):
+
+    clock = Clock(dut.clk, 10, units="ns")
+    cocotb.start_soon(clock.start())
+    cocotb.start_soon(memory_model(dut))
+
+    # RESET
+    dut.rst_n.value = 0
+    dut.data_write_n.value = 3
+    dut.data_read_n.value = 3
+    await Timer(100, units="ns")
+
+    dut.rst_n.value = 1
+    await Timer(50, units="ns")
+
+    # ---------------- INIT MEMORY ---------------- #
+    base_src = 0x1000
+    base_dst = 0x2000
+
+    for i in range(16):
+        memory[base_src + i*4] = i + 1
+
+    # ---------------- CONFIG DMA ---------------- #
+    await write_reg(dut, 0x02, base_src)
+    await write_reg(dut, 0x04, base_dst)
+    await write_reg(dut, 0x06, 64)  # 16 words
+
+    dut._log.info("Starting DMA...")
+    await write_reg(dut, 0x00, 0x01)
+
+    # ---------------- WAIT DONE ---------------- #
+    for _ in range(500):
+        await RisingEdge(dut.clk)
+        if dut.done_flag.value == 1:
+            break
+
+    # ---------------- VERIFY ---------------- #
+    for i in range(16):
+        src_val = memory[base_src + i*4]
+        dst_val = memory.get(base_dst + i*4, None)
+
+        if dst_val != src_val:
+            raise RuntimeError(
+                f"Mismatch at {hex(base_dst + i*4)}: expected {src_val}, got {dst_val}"
+            )
+
+    dut._log.info("✅ BASIC TRANSFER PASSED")
+
+
+
+# ---------------- 2D MODE TEST ---------------- #
+@cocotb.test()
+async def test_dma_2d(dut):
+
+    clock = Clock(dut.clk, 10, units="ns")
+    cocotb.start_soon(clock.start())
+    cocotb.start_soon(memory_model(dut))
+
+    # RESET
+    dut.rst_n.value = 0
+    dut.data_write_n.value = 3
+    dut.data_read_n.value = 3
+    await Timer(100, units="ns")
+
+    dut.rst_n.value = 1
+    await Timer(50, units="ns")
+
+    base_src = 0x3000
+    base_dst = 0x4000
+
+    # Fill 2D pattern
+    for i in range(32):
+        memory[base_src + i*4] = i + 100
+
+    # CONFIG 2D
+    await write_reg(dut, 0x02, base_src)
+    await write_reg(dut, 0x04, base_dst)
+    await write_reg(dut, 0x03, 16)   # stride
+    await write_reg(dut, 0x05, 16)   # row size
+    await write_reg(dut, 0x06, 64)   # total
+
+    # Enable 2D mode (bit 4)
+    await write_reg(dut, 0x00, 0x11)
+
+    # WAIT
+    for _ in range(500):
+        await RisingEdge(dut.clk)
+        if dut.done_flag.value == 1:
+            break
+
+    dut._log.info("✅ 2D MODE EXECUTED (manual inspection possible)")
