@@ -27,7 +27,6 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
     localparam PERI_USER = 4'hF;
 
     // Register the reset on the negative edge of clock for safety.
-    // This also allows the option of async reset in the design, which might be preferable in some cases
     /* verilator lint_off SYNCASYNCNET */
     reg rst_reg_n;
     /* verilator lint_on SYNCASYNCNET */
@@ -47,14 +46,59 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
                       qspi_clk_out, qspi_data_out[1:0], qspi_flash_select};
     assign uio_oe = rst_n ? {2'b11, qspi_data_oe[3:2], 1'b1, qspi_data_oe[1:0], 1'b1} : 8'h00;
 
-    wire [27:0] addr;
-    wire  [1:0] write_n;
-    wire  [1:0] read_n;
-    wire        read_complete;
-    wire [31:0] data_to_write;
+    // ---------------------------------------------------------
+    // CPU Master Signals (Intercepted)
+    // ---------------------------------------------------------
+    wire [27:0] cpu_addr;
+    wire  [1:0] cpu_write_n;
+    wire  [1:0] cpu_read_n;
+    wire        cpu_read_complete;
+    wire [31:0] cpu_data_to_write;
+    wire        cpu_data_ready;
 
-    wire        data_ready;
+    // ---------------------------------------------------------
+    // DMA Master Signals (From peripherals.v)
+    // ---------------------------------------------------------
+    wire [31:0] dma_m_addr;
+    wire [31:0] dma_m_wdata;
+    wire [3:0]  dma_m_wstrb;
+    wire        dma_m_write;
+    wire        dma_m_read;
+    wire        dma_m_valid;
+    wire [31:0] dma_m_rdata;
+    wire        dma_m_ready;
+    wire        dma_m_error;
+    wire        dma_idle;
+
+    // ---------------------------------------------------------
+    // AI-HDL HARDWARE ARBITRATOR (DMA Priority)
+    // ---------------------------------------------------------
+    wire dma_active = dma_m_valid;
+
+    // Map DMA AXI-style strobes to TinyQV active-low read/write semantics
+    wire [1:0] dma_write_n = dma_m_write ? ((dma_m_wstrb == 4'hF) ? 2'b10 : (dma_m_wstrb >= 4'h3) ? 2'b01 : 2'b00) : 2'b11;
+    wire [1:0] dma_read_n  = dma_m_read  ? 2'b10 : 2'b11;
+
+    // Multiplex the physical bus wires
+    wire [27:0] arb_addr          = dma_active ? dma_m_addr[27:0] : cpu_addr;
+    wire [1:0]  arb_write_n       = dma_active ? dma_write_n      : cpu_write_n;
+    wire [1:0]  arb_read_n        = dma_active ? dma_read_n       : cpu_read_n;
+    wire [31:0] arb_data_to_write = dma_active ? dma_m_wdata      : cpu_data_to_write;
+
+    // Global memory/peripheral data returns
     reg [31:0] data_from_read;
+    wire       data_ready; 
+    wire       arb_read_complete = dma_active ? (dma_m_read && data_ready) : cpu_read_complete;
+
+    // DMA Return Path
+    assign dma_m_rdata = data_from_read;
+    assign dma_m_ready = data_ready;
+    assign dma_m_error = 1'b0; // Hardcoded for internal bus success
+
+    // CPU Return Path (Stall CPU if DMA has taken the bus)
+    wire cpu_req = (cpu_write_n != 2'b11) || (cpu_read_n != 2'b11);
+    assign cpu_data_ready = dma_active ? (cpu_req ? 1'b0 : 1'b1) : data_ready;
+    // ---------------------------------------------------------
 
     wire       debug_instr_complete;
     wire       debug_instr_ready;
@@ -82,9 +126,9 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
     reg debug_register_data;
     reg [3:0] debug_rd_r;
 
-    // Debug UART - runs fast to reduce the width of the count necessary for the divider!
+    // Debug UART 
     wire debug_uart_tx_busy;
-    wire debug_uart_tx_start = write_n != 2'b11 && connect_peripheral == PERI_DEBUG_UART;
+    wire debug_uart_tx_start = arb_write_n != 2'b11 && connect_peripheral == PERI_DEBUG_UART;
 
     // Time
     reg [6:2] time_limit;
@@ -111,13 +155,13 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
         .clk(clk),
         .rstn(rst_reg_n),
 
-        .data_addr(addr),
-        .data_write_n(write_n),
-        .data_read_n(read_n),
-        .data_read_complete(read_complete),
-        .data_out(data_to_write),
+        .data_addr(cpu_addr),
+        .data_write_n(cpu_write_n),
+        .data_read_n(cpu_read_n),
+        .data_read_complete(cpu_read_complete),
+        .data_out(cpu_data_to_write),
 
-        .data_ready(data_ready),
+        .data_ready(cpu_data_ready),
         .data_in(data_from_read),
 
         .interrupt_req(interrupt_req),
@@ -168,24 +212,36 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
         .audio(audio),
         .audio_select(audio_select),
 
-        .addr_in(addr[10:0]),
-        .data_in(data_to_write),
+        .addr_in(arb_addr[10:0]),
+        .data_in(arb_data_to_write),
 
-        .data_write_n(write_n),
-        .data_read_n(read_n),
+        .data_write_n(arb_write_n),
+        .data_read_n(arb_read_n),
 
         .data_out(peri_data_out),
         .data_ready(peri_data_ready),
 
-        .data_read_complete(read_complete),
+        .data_read_complete(arb_read_complete),
 
-        .user_interrupts(peri_interrupts)
+        .user_interrupts(peri_interrupts),
+
+        // NEW: DMA Master Bus mapped back out for arbitration
+        .dma_m_addr(dma_m_addr), 
+        .dma_m_wdata(dma_m_wdata),
+        .dma_m_wstrb(dma_m_wstrb),
+        .dma_m_write(dma_m_write),
+        .dma_m_read(dma_m_read),
+        .dma_m_valid(dma_m_valid),
+        .dma_m_rdata(dma_m_rdata), 
+        .dma_m_ready(dma_m_ready), 
+        .dma_m_error(dma_m_error),
+        .dma_idle(dma_idle)
     );
 
     always @(*) begin
-        if ({addr[27:6], addr[1:0]} == 24'h800000) 
-            connect_peripheral = addr[5:2];
-        else if (addr[27:11] == 17'h10000)
+        if ({arb_addr[27:6], arb_addr[1:0]} == 24'h800000) 
+            connect_peripheral = arb_addr[5:2];
+        else if (arb_addr[27:11] == 17'h10000)
             connect_peripheral = PERI_USER;
         else
             connect_peripheral = PERI_NONE;
@@ -194,12 +250,12 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
     // Read data
     always @(*) begin
         case (connect_peripheral)
-            PERI_ID:          data_from_read = {24'h0, 8'h41};  // A instance
-            PERI_GPIO_OUT_SEL:data_from_read = {24'h0, gpio_out_sel, 6'h0};
+            PERI_ID:                data_from_read = {24'h0, 8'h41};  // A instance
+            PERI_GPIO_OUT_SEL:      data_from_read = {24'h0, gpio_out_sel, 6'h0};
             PERI_DEBUG_UART_STATUS: data_from_read = {31'h0, debug_uart_tx_busy};
-            PERI_TIME_LIMIT:  data_from_read = {25'h0, time_limit, 2'b11};
-            PERI_USER:        data_from_read = peri_data_out;
-            default:          data_from_read = 32'hFFFF_FFFF;
+            PERI_TIME_LIMIT:        data_from_read = {25'h0, time_limit, 2'b11};
+            PERI_USER:              data_from_read = peri_data_out;
+            default:                data_from_read = 32'hFFFF_FFFF;
         endcase
     end
 
@@ -211,9 +267,9 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
             gpio_out_sel <= {!ui_in[0], 1'b0};
             time_limit <= (CLOCK_MHZ / 4 - 1);
         end
-        if (write_n != 2'b11) begin
-            if (connect_peripheral == PERI_GPIO_OUT_SEL) gpio_out_sel <= data_to_write[7:6];
-            if (connect_peripheral == PERI_TIME_LIMIT) time_limit <= data_to_write[6:2];
+        if (arb_write_n != 2'b11) begin
+            if (connect_peripheral == PERI_GPIO_OUT_SEL) gpio_out_sel <= arb_data_to_write[7:6];
+            if (connect_peripheral == PERI_TIME_LIMIT) time_limit <= arb_data_to_write[6:2];
         end
     end
 
@@ -222,7 +278,7 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
         .resetn(rst_reg_n),
         .uart_txd(debug_uart_txd),
         .uart_tx_en(debug_uart_tx_start),
-        .uart_tx_data(data_to_write[7:0]),
+        .uart_tx_data(arb_data_to_write[7:0]),
         .uart_tx_busy(debug_uart_tx_busy) 
     );
 
@@ -242,8 +298,8 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
     always @(posedge clk) begin
         if (!rst_reg_n)
             debug_register_data <= ui_in[1];
-        else if (write_n != 2'b11 && connect_peripheral == PERI_DEBUG)
-            debug_register_data <= data_to_write[0];
+        else if (arb_write_n != 2'b11 && connect_peripheral == PERI_DEBUG)
+            debug_register_data <= arb_data_to_write[0];
     end
 
     always @(posedge clk) begin
@@ -256,8 +312,8 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
                           debug_instr_ready,
                           debug_instr_valid,
                           debug_fetch_restart,
-                          read_n != 2'b11,
-                          write_n != 2'b11,
+                          arb_read_n != 2'b11,
+                          arb_write_n != 2'b11,
                           debug_data_ready,
                           debug_interrupt_pending,
                           debug_branch,
@@ -272,6 +328,6 @@ module tt_um_tt_tinyQV #(parameter CLOCK_MHZ=64) (
     assign debug_signal = debug_signals[ui_in[6:3]];
 
     // List all unused inputs to prevent warnings
-    wire _unused = &{ena, uio_in[7:6], uio_in[3], uio_in[0], read_complete, 1'b0};
+    wire _unused = &{ena, uio_in[7:6], uio_in[3], uio_in[0], cpu_read_complete, 1'b0};
 
 endmodule

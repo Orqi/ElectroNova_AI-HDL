@@ -37,7 +37,21 @@ module tinyQV_peripherals #(parameter CLOCK_MHZ=64) (
 
     input         data_read_complete,  // Set by TinyQV when a read is complete
 
-    output [15:2] user_interrupts  // User peripherals get interrupts 2-15
+    output [15:2] user_interrupts, // User peripherals get interrupts 2-15
+
+    // ---------------------------------------------------------
+    // DMA Master Bus Interface Exposed to Top Level
+    // ---------------------------------------------------------
+    output wire [31:0] dma_m_addr,
+    output wire [31:0] dma_m_wdata,
+    output wire [3:0]  dma_m_wstrb,
+    output wire        dma_m_write,
+    output wire        dma_m_read,
+    output wire        dma_m_valid,
+    input  wire [31:0] dma_m_rdata,
+    input  wire        dma_m_ready,
+    input  wire        dma_m_error,
+    output wire        dma_idle
 );
 
     // Registered data out to TinyQV
@@ -450,18 +464,18 @@ module tinyQV_peripherals #(parameter CLOCK_MHZ=64) (
 
         .user_interrupt(user_interrupts[14]),
 
-        // Master Bus connections (Stubbed for now, connect to system bus later)
-        .m_addr(), 
-        .m_wdata(),
-        .m_wstrb(),
-        .m_write(),
-        .m_read(),
-        .m_valid(),
-        .m_rdata(32'h0), 
-        .m_ready(1'b1), 
-        .m_error(1'b0),
+        // Master Bus connections routed to top level
+        .m_addr(dma_m_addr), 
+        .m_wdata(dma_m_wdata),
+        .m_wstrb(dma_m_wstrb),
+        .m_write(dma_m_write),
+        .m_read(dma_m_read),
+        .m_valid(dma_m_valid),
+        .m_rdata(dma_m_rdata), 
+        .m_ready(dma_m_ready), 
+        .m_error(dma_m_error),
         
-        .idle()
+        .idle(dma_idle)
     );
 
     mkTinyTone_Peripheral i_tinytone15 (
