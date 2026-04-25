@@ -29,7 +29,7 @@
 
 ### Special Considerations
 - **Bonus Features Implemented**: The security guard logic was optimized by the Yosys synthesizer to *reduce* the overall DP-2 area footprint by 55 logic gates while increasing system security.
-- **Threat Model Focus**: CWE-119 (Improper Restriction of Memory Buffer Bounds) via "Stride-Jump" exploit.
+- **Threat Model Focus**: Primary vulnerability identified as CWE-119 (Improper Restriction of Memory Buffer Bounds) via the "Stride-Jump" exploit, with related impacts including CWE-284 (Improper Access Control), CWE-200 (Information Exposure), and CWE-400 (Denial of Service risk).
 - **Future Improvements**: Integration with a dynamic privilege-level bus fabric (e.g., AXI TrustZone) to allow run-time boundary updates from secure OS kernels.
 
 ### Verification Checklist
