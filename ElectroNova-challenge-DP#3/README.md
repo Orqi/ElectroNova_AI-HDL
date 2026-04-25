@@ -12,7 +12,7 @@
 - **Mentor**: Sudipta Paria
 
 ## Challenge Summary
-The objective for DP-3 was to perform a comprehensive Security Assessment and implement Hardware Hardening on our optimized 2D-DMA design. We transformed the IP into a Secure AI Data Gateway by mitigating critical CWE-119 buffer bound vulnerabilities (the "Stride-Jump" exploit) using a custom Hardware Memory Protection Unit (MPU), all while preserving our DP-2 Power, Performance, and Area (PPA) optimizations.
+The objective for DP-3 was to perform a comprehensive Security Assessment and implement Hardware Hardening on our optimized 2D-DMA design. We transformed the IP into a Secure AI Data Gateway by mitigating a critical CWE-119 (Improper Restriction of Memory Buffer Bounds) vulnerability, known as the "Stride-Jump" exploit. This flaw also exposed related risks including CWE-284 (Improper Access Control), CWE-200 (Information Exposure), and CWE-400 (Denial of Service). These were addressed using a custom Hardware Memory Protection Unit (MPU), while fully preserving our DP-2 Power, Performance, and Area (PPA) optimizations.
 
 ## Key Features
 - **Hardware Memory Protection Unit (MPU):** Integrated programmable `OFF_SRC_BOUND` and `OFF_DST_BOUND` registers to enforce strict hardware-level memory isolation.
