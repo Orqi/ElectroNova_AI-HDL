@@ -9,8 +9,8 @@
 ### Team Members
 | Name | Role | Email | Contribution % |
 |------|------|-------|----------------|
-| Amrita Reji | Project Lead | contactamreji@gmail.com | 85% |
-| Vidya S R | Assistant Project Lead | vidyasr2608@gmail.com | 5% |
+| Amrita Reji | Project Lead | contactamreji@gmail.com | 75% |
+| Vidya S R | Assistant Project Lead | vidyasr2608@gmail.com | 15% |
 | Amrita M Pillai | System Validation | amritampillai06@gmail.com | 5% |
 | Karthik M Raj | Documentation | karthikmraj37@gmail.com | 5% |
 
