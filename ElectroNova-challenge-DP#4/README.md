@@ -3,7 +3,7 @@
 ## Team Information
 - **Team Name**: ElectroNova
 - **Institution**: College of Engineering Trivandrum
-- **Division**: Upper
+- **Division**: Lower
 - **Team Members**: 
   - **Amrita Reji** - Project Lead - contactamreji@gmail.com
   - **Vidya S R** - Assistant Project Lead - vidyasr2608@gmail.com
