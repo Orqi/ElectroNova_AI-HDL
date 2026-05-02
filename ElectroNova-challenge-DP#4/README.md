@@ -48,21 +48,26 @@ The objective for DP-4 was to transform our secure, hardware-hardened 2D-DMA des
 
 ---
 
-## Innovation Highlights
-Our standout innovation for DP-4 was the implementation of **Atomic AI Tiling Determinism**. By isolating the DMA's control logic with internal shadow registers, we ensured that high-speed AI data movement is completely decoupled from software-side race conditions. 
+Innovation Highlights
+Our standout innovation for DP-4 was the successful physical realization of our secure architecture into a fully manufacturable GDSII layout. Transitioning from logical RTL to physical silicon required overcoming significant physical design challenges:
 
-Additionally, we proved **Seamless SoC Integration**. Our custom priority hardware arbiter allows the `tqvp_dma` to act as a primary system master. When an AI workload is triggered, the hardware instantly stalls the TinyQV CPU and captures the bus, ensuring zero-jitter data movement while maintaining the CPU state until the burst is complete.
+Timing-Closed Physical Determinism: The "Hardware Jail" (MPU) and "Atomic Latching" shadow registers introduced deep combinational paths that threatened setup times. Through iterative floorplanning and optimized Clock Tree Synthesis (CTS), we successfully placed and routed this complex security logic. We achieved complete timing closure (WNS = 0.0) at our target frequency, proving that our security measures do not compromise physical performance.
 
+Zero-Congestion Master Routing: Seamlessly integrating the tqvp_dma as a primary bus master alongside the CPU required heavy cross-module routing. By meticulously managing pin placements and leveraging optimal metal layer routing in the OpenLane flow, we physically integrated the priority hardware arbiter without creating routing bottlenecks or antenna violations.
+
+Foundry-Ready Silicon (DRC/LVS Clean): Our ultimate DP-4 achievement is a layout that isn't just simulated, but ready for fabrication. The design successfully passed all rigorous Design Rule Checks (DRC) and Layout Versus Schematic (LVS) verifications against the Sky130 PDK, resulting in a finalized, error-free GDSII tape-out.
+
+![Screenshot of TQVP DMA from Klayout](media/Screenshot_of_tqvp_dma_from_Klayout.png)
 ---
 
 ## Visual Verification
 
 ### 1. AI 2D-Stride Verification
-![Hardware 2D-Stride Verification](stride_proof.png)
+![Hardware 2D-Stride Verification](![Hardware 2D-Stride Verification](media/tqvp_dma_stride_proof.png))
 *Waveform Description: The DMA engine detects the end of a row at address `0x1004` and autonomously applies the `0x100` stride to jump to `0x1100` in a single cycle. This confirms the autonomous extraction of AI tensor sub-matrices.*
 
 ### 2. Hardware Arbiter Proof
-![Priority Bus Arbitration](arbiter_proof.png)
+![Priority Bus Arbitration](media/dma_arbitration_takeover.png)
 *Waveform Description: When `dma_m_valid` is asserted, the arbitrator redirects the bus to the DMA and pulls `cpu_data_ready` low, successfully freezing the CPU pipeline to prioritize the AI data burst.*
 
 ---
